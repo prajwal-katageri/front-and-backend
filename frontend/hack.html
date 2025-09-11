@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Crop Advisor - Multilingual Chatbot</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 10px; }
+    .chat { border: 1px solid #ddd; padding: 12px; border-radius: 8px; min-height: 300px; }
+    .message { margin: 8px 0; }
+    .user { text-align: right; color: #0b5394; }
+    .bot { text-align: left; color: #006400; }
+    .controls { margin-top: 12px; display:flex; gap:8px; align-items:center; }
+    button { padding:8px 12px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <h2>🌾 Crop Advisor Chatbot (Multilingual)</h2>
+  <div>
+    <label for="lang">Language:</label>
+    <select id="lang">
+      <option value="en">English</option>
+      <option value="hi">हिन्दी</option>
+      <option value="kn">ಕನ್ನಡ</option>
+    </select>
+  </div>
+
+  <div class="chat" id="chat">
+    <div class="message bot">Hello! Ask about crops, pests, fertilizer or irrigation. Use voice or type.</div>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="input" placeholder="Type your question..." style="flex:1; padding:8px;" />
+    <button id="send">Send</button>
+    <button id="voice">🎤 Voice</button>
+    <button id="speakToggle">🔊 Speak: On</button>
+  </div>
+
+<script>
+const API_BASE = "http://localhost:8000"; // adjust when deployed
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const voiceBtn = document.getElementById('voice');
+const langSel = document.getElementById('lang');
+const speakToggle = document.getElementById('speakToggle');
+
+let speakOn = true;
+speakToggle.onclick = () => { speakOn = !speakOn; speakToggle.textContent = speakOn ? "🔊 Speak: On" : "🔈 Speak: Off"; };
+
+function appendMessage(text, who='bot'){
+  const d = document.createElement('div');
+  d.className = 'message ' + (who==='user' ? 'user' : 'bot');
+  d.textContent = text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function askServer(text, lang) {
+  try {
+    const res = await fetch(API_BASE + '/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text, lang })
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || res.statusText);
+    }
+    return await res.json();
+  } catch (e) {
+    console.error(e);
+    return { answer: "Error contacting server: " + e.message };
+  }
+}
+
+async function handleSend() {
+  const t = input.value.trim();
+  if (!t) return;
+  appendMessage(t, 'user');
+  input.value = '';
+  const lang = langSel.value;
+  const resp = await askServer(t, lang);
+  appendMessage(resp.answer || resp, 'bot');
+  if (speakOn) speakText(resp.answer, lang);
+}
+
+sendBtn.onclick = handleSend;
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSend(); });
+
+/* ---------- Voice recognition (Web Speech API) ---------- */
+let recognition = null;
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'en-IN';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    input.value = transcript;
+    // autopost
+    handleSend();
+  };
+  recognition.onerror = (e) => { console.log('Speech error', e); };
+} else {
+  voiceBtn.disabled = true;
+  voiceBtn.title = "Voice input not supported in this browser";
+}
+
+voiceBtn.onclick = () => {
+  if (!recognition) return alert('Voice input not supported');
+  // set recognition language based on selected language
+  const lang = langSel.value;
+  recognition.lang = (lang === 'en' ? 'en-IN' : (lang === 'hi' ? 'hi-IN' : 'kn-IN'));
+  recognition.start();
+};
+
+/* ---------- Speech synthesis ---------- */
+function speakText(text, lang) {
+  if (!('speechSynthesis' in window)) return;
+  const ut = new SpeechSynthesisUtterance(text);
+  // choose voice by lang if possible
+  const voices = speechSynthesis.getVoices();
+  let selected = null;
+  for (const v of voices) {
+    if (lang === 'en' && v.lang.startsWith('en')) { selected = v; break; }
+    if (lang === 'hi' && v.lang.startsWith('hi')) { selected = v; break; }
+    if (lang === 'kn' && v.lang.startsWith('kn')) { selected = v; break; }
+  }
+  if (selected) ut.voice = selected;
+  // fallback: keep lang code
+  ut.lang = (lang === 'en' ? 'en-IN' : (lang === 'hi' ? 'hi-IN' : 'kn-IN'));
+  speechSynthesis.cancel();
+  speechSynthesis.speak(ut);
+}
+
+/* Simple demo messages for quick testing */
+appendMessage("Try: 'How often should I water wheat?' or speak in Kannada/Hindi.", 'bot');
+
+</script>
+</body>
+</html>
