@@ -4,12 +4,18 @@ WORKDIR /app
 
 COPY . .
 
-RUN mvn -DskipTests package
+# Build the project (checks if pom.xml is in current dir or in backend/ folder)
+RUN if [ -f "pom.xml" ]; then \
+        mvn -DskipTests package; \
+    else \
+        cd backend && mvn -DskipTests package && mkdir -p ../target && cp target/*.jar ../target/; \
+    fi
 
 # Runtime stage
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
+# Copy the built jar
 COPY --from=build /app/target/*.jar ./app.jar
 
 ENV PORT=8081
