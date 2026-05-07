@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd opd-frontend && npm install && npm run build",
+  "outputDirectory": "opd-frontend/build",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
